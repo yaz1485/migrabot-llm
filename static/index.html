@@ -1,0 +1,78 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>MigraBot LLM</title>
+<style>
+  body { font-family: Arial, sans-serif; background: #f4f4f9; margin: 0; padding: 20px; display: flex; justify-content: center; }
+  .container { width: 100%; max-width: 760px; background: #fff; padding: 20px; border-radius: 8px; box-shadow: 0 4px 8px rgba(0,0,0,.1); }
+  h2 { margin: 0 0 4px; } p.sub { margin: 0 0 14px; color: #666; font-size: 14px; }
+  #chat { height: 440px; overflow-y: auto; border: 1px solid #ddd; border-radius: 6px; padding: 10px; background: #fafafa; margin-bottom: 10px; }
+  .msg { margin-bottom: 10px; padding: 10px; border-radius: 6px; white-space: pre-wrap; line-height: 1.4; }
+  .user { background: #e0f7fa; } .bot { background: #e8eaf6; } .error { background: #ffebee; color: #b71c1c; }
+  .fuentes { font-size: 12px; color: #555; margin-top: 6px; }
+  .fila { display: flex; gap: 8px; }
+  input { flex: 1; padding: 10px; border: 1px solid #ccc; border-radius: 6px; }
+  button { padding: 10px 18px; background: #1565c0; color: #fff; border: none; border-radius: 6px; cursor: pointer; }
+  button:disabled { background: #90a4ae; }
+</style>
+</head>
+<body>
+<div class="container">
+  <h2>MigraBot LLM</h2>
+  <p class="sub">Asistente con Llama + RAG para migrar tablas DBF a PostgreSQL</p>
+  <div id="chat"></div>
+  <div class="fila">
+    <input id="pregunta" placeholder="Ej: ¿Cómo migro CLIENTES.DBF a PostgreSQL?">
+    <button id="enviar">Enviar</button>
+  </div>
+</div>
+<script>
+  const chat = document.getElementById('chat');
+  const input = document.getElementById('pregunta');
+  const boton = document.getElementById('enviar');
+
+  function agregar(clase, texto, fuentes) {
+    const div = document.createElement('div');
+    div.className = 'msg ' + clase;
+    div.textContent = texto;
+    if (fuentes && fuentes.length) {
+      const f = document.createElement('div');
+      f.className = 'fuentes';
+      f.textContent = 'Fuentes consultadas (RAG): ' + fuentes.join(', ');
+      div.appendChild(f);
+    }
+    chat.appendChild(div);
+    chat.scrollTop = chat.scrollHeight;
+    return div;
+  }
+
+  async function enviar() {
+    const pregunta = input.value.trim();
+    if (!pregunta) return;
+    agregar('user', 'Tú: ' + pregunta);
+    input.value = ''; boton.disabled = true;
+    const espera = agregar('bot', 'MigraBot está pensando... (puede tardar unos segundos)');
+    try {
+      const r = await fetch('/consultar', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ pregunta })
+      });
+      const data = await r.json();
+      espera.remove();
+      if (!r.ok) agregar('error', 'Error: ' + data.detail);
+      else agregar('bot', 'MigraBot:\n' + data.respuesta, data.fuentes);
+    } catch (e) {
+      espera.remove();
+      agregar('error', 'No se pudo conectar con el servidor.');
+    }
+    boton.disabled = false; input.focus();
+  }
+
+  boton.addEventListener('click', enviar);
+  input.addEventListener('keydown', e => { if (e.key === 'Enter') enviar(); });
+</script>
+</body>
+</html>

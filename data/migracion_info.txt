@@ -1,0 +1,15 @@
+PROYECTO MIGRABOT: Migración del sistema legacy SAFCO (archivos DBF) a PostgreSQL 16.
+
+TABLA CLIENTES.DBF. Campos: COD_CLI C(6) código del cliente, es la llave primaria; NOM_CLI C(40) nombre o razón social; RFC C(13) registro fiscal; FEC_ALT C(8) fecha de alta en formato DDMMAAAA; ESTATUS C(1) con valores A=activo y B=baja; SALDO N(12,2) saldo pendiente en pesos.
+
+TABLA DESTINO clientes (PostgreSQL). Columnas: id_cliente VARCHAR(6) PRIMARY KEY (desde COD_CLI); nombre VARCHAR(100) NOT NULL (desde NOM_CLI); rfc VARCHAR(13) UNIQUE (desde RFC); fecha_alta DATE (desde FEC_ALT); activo BOOLEAN (desde ESTATUS); saldo NUMERIC(12,2) DEFAULT 0 (desde SALDO).
+
+TABLA FACTURAS.DBF. Campos: NUM_FAC N(8) número de factura, llave primaria; COD_CLI C(6) cliente que compra, relaciona con CLIENTES; FEC_FAC C(8) fecha en formato DDMMAAAA; IMPORTE N(12,2) subtotal; IVA N(12,2) impuesto.
+
+TABLA DESTINO facturas (PostgreSQL). Columnas: id_factura INTEGER PRIMARY KEY (desde NUM_FAC); id_cliente VARCHAR(6) REFERENCES clientes(id_cliente) (desde COD_CLI); fecha DATE (desde FEC_FAC); subtotal NUMERIC(12,2); iva NUMERIC(12,2); total NUMERIC(12,2) calculado como subtotal + iva.
+
+REGLAS DE TRANSFORMACIÓN. 1) Las fechas DDMMAAAA se convierten a DATE con TO_DATE(campo, 'DDMMYYYY'). 2) Las fechas con valor '00000000' o vacías se cargan como NULL. 3) RFC y COD_CLI se limpian con TRIM y UPPER. 4) ESTATUS 'A' se convierte en activo = TRUE y 'B' en activo = FALSE. 5) Saldos negativos se marcan para revisión manual y no se cargan.
+
+ORDEN DE CARGA. Primero se migra la tabla clientes y después facturas, para respetar la llave foránea. Los registros se insertan en lotes de 1000 filas con Python. Las facturas cuyo COD_CLI no exista en clientes se envían a la tabla facturas_rechazadas.
+
+VALIDACIONES POST-MIGRACIÓN. 1) El conteo de registros en origen y destino debe coincidir. 2) No debe haber RFC duplicados. 3) La suma de SALDO en DBF debe ser igual a la suma de saldo en PostgreSQL. 4) Toda factura debe tener un cliente existente (integridad referencial).
